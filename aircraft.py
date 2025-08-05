@@ -1,0 +1,138 @@
+"""2D aircraft model"""
+import numpy as np
+
+from dataclasses import dataclass
+
+from environment import Environment
+
+
+@dataclass
+class AircraftConfig:
+    mass: float                       # [kg]
+    max_thrust: float                 # [N]
+    reference_area: float             # [m^2]
+    lift_curve_slope: float           # [1/rad]
+    parasite_drag_coefficient: float  # [-]
+    induced_drag_factor: float        # [-]
+    pitch_rate_gain: float            # [rad/s/rad]
+    max_control_surface_angle: float  # [rad]
+
+
+class Aircraft2D:
+    """2D aircraft model for simulation
+    """
+
+    def __init__(self, config: AircraftConfig, environment: Environment) -> None:
+        """Initialize the aircraft with specified parameters
+
+        Args:
+            config (AircraftConfig): aircraft parameters
+            environment (Environment): environment parameters
+        """
+        self.config: AircraftConfig = config
+        self.environment: Environment = environment
+
+        # State variables
+        self._thrust: float = 0.0                    # [-] thrust setting (0.0 to 1.0)
+        self._control_surface_angle: float = 0.0     # [rad] flap angle
+        self.pos: np.ndarray = np.array([0.0, 0.0])  # [m] position
+        self.vel: np.ndarray = np.array([0.0, 0.0])  # [m/s] velocity
+        self.pitch: float = 0.0                      # [rad] pitch angle
+        self.on_ground: bool = True
+
+    @property
+    def thrust_setting(self) -> float:
+        """Get or set the thrust setting of the aircraft in range [0.0, 1.0]
+
+        Returns:
+            float: thrust setting [-]
+        """
+        return self._thrust
+    
+    @thrust_setting.setter
+    def thrust_setting(self, value: float) -> None:
+        self._thrust = np.clip(value, 0.0, 1.0)
+
+    @property
+    def control_surface_angle(self) -> float:
+        """Get or set the control surface angle of the aircraft in range [-max_angle, max_angle]
+
+        Returns:
+            float: control surface angle [rad]
+        """
+        return self._control_surface_angle
+    
+    @control_surface_angle.setter
+    def control_surface_angle(self, value: float) -> None:
+        self._control_surface_angle = np.clip(value,
+                                              -self.config.max_control_surface_angle,
+                                              self.config.max_control_surface_angle)
+
+    @property
+    def thrust(self) -> float:
+        """Get the current thrust force of the aircraft
+
+        Returns:
+            float: current thrust force [N]
+        """
+        return self._thrust * self.config.max_thrust
+    
+    @property
+    def airspeed(self) -> float:
+        """Get the aircraft airspeed
+
+        Returns:
+            float: current airspeed [m/s]
+        """
+        return np.linalg.norm(self.vel)
+    
+    def step(self, dt: float) -> None:
+        
+        # Get velocity unit vector
+        v = self.airspeed
+        if v > 1e-5:
+            vel_unit = self.vel / v
+        else:
+            vel_unit = np.array([1.0, 0.0])  # default
+
+        # Calculate angle of attack
+        flight_path_angle = np.arctan2(vel_unit[1], vel_unit[0])
+        alpha = self.pitch - flight_path_angle
+
+        # Calculate lift and drag coefficients
+        lift_coefficient = self.config.lift_curve_slope * alpha
+        drag_coefficient = self.config.parasite_drag_coefficient \
+            + self.config.induced_drag_factor * lift_coefficient**2
+        
+        # Calculate lift and drag
+        dynamic_pressure = 0.5 * self.environment.air_density * v**2
+        lift_mag = dynamic_pressure * self.config.reference_area * lift_coefficient
+        drag_mag = dynamic_pressure * self.config.reference_area * drag_coefficient
+        lift = lift_mag * np.array([-vel_unit[1], vel_unit[0]])  # assume perpendicular to velocity
+        drag = drag_mag * - vel_unit                             # assume opposite to velocity
+
+        # Calculate gravity and thrust
+        gravity = np.array([0.0, -self.environment.gravity * self.config.mass])
+        thrust = self.thrust * vel_unit  # assume in direction of velocity
+
+        # Calculate acceleration
+        total_force = lift + drag + gravity + thrust
+        acceleration = total_force / self.config.mass
+
+        # Update velocity and position
+        self.vel += acceleration * dt
+        self.pos += self.vel * dt
+
+        # Update pitch angle based on control surface angle
+        pitch_rate = self.config.pitch_rate_gain * self.control_surface_angle
+        self.pitch += pitch_rate * dt
+
+        # Check ground contact
+        if self.pos[1] < 0.0:
+            self.pos[1] = 0.0
+            if self.vel[1] < 0.0:
+                self.vel[1] = 0.0
+        self.on_ground = self.pos[1] <= 0.0 and self.vel[1] <= 1e-9
+
+    def draw(self):
+        pass
