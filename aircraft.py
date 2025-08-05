@@ -1,21 +1,30 @@
 """2D aircraft model"""
 import numpy as np
+import pygame as pg
 
 from dataclasses import dataclass
+from typing import Literal
 
+from camera import world_to_screen
 from environment import Environment
 
 
 @dataclass
 class AircraftConfig:
-    mass: float                       # [kg]
-    max_thrust: float                 # [N]
-    reference_area: float             # [m^2]
-    lift_curve_slope: float           # [1/rad]
-    parasite_drag_coefficient: float  # [-]
-    induced_drag_factor: float        # [-]
-    pitch_rate_gain: float            # [rad/s/rad]
-    max_control_surface_angle: float  # [rad]
+    mass: float                        # [kg]
+    max_thrust: float                  # [N]
+    reference_area: float              # [m^2]
+    lift_curve_slope: float            # [1/rad]
+    parasite_drag_coefficient: float   # [-]
+    induced_drag_factor: float         # [-]
+    pitch_rate_gain: float             # [rad/s/rad]
+    max_control_surface_angle: float   # [rad]
+    wheel_drag_coefficient: float      # [-]
+    stall_angle: float                 # [rad]
+    max_vertical_landing_speed: float  # [m/s]
+
+
+FORCES = Literal['lift', 'drag', 'gravity', 'thrust', 'wheel_drag']
 
 
 class Aircraft2D:
@@ -38,7 +47,16 @@ class Aircraft2D:
         self.pos: np.ndarray = np.array([0.0, 0.0])  # [m] position
         self.vel: np.ndarray = np.array([0.0, 0.0])  # [m/s] velocity
         self.pitch: float = 0.0                      # [rad] pitch angle
+        self.forces: dict[FORCES, np.ndarray] = {
+            "lift": np.array([0.0, 0.0]),
+            "drag": np.array([0.0, 0.0]),
+            "gravity": np.array([0.0, 0.0]),
+            "thrust": np.array([0.0, 0.0]),
+            "wheel_drag": np.array([0.0, 0.0])
+        }
+        self.stalled: bool = False
         self.on_ground: bool = True
+        self.crashed: bool = False
 
     @property
     def thrust_setting(self) -> float:
@@ -86,8 +104,12 @@ class Aircraft2D:
         """
         return np.linalg.norm(self.vel)
     
-    def step(self, dt: float) -> None:
-        
+    def calculate_forces(self) -> np.ndarray:
+        """Calculate the forces acting on the aircraft
+
+        Returns:
+            np.ndarray: total force vector [N]
+        """
         # Get velocity unit vector
         v = self.airspeed
         if v > 1e-5:
@@ -100,7 +122,11 @@ class Aircraft2D:
         alpha = self.pitch - flight_path_angle
 
         # Calculate lift and drag coefficients
-        lift_coefficient = self.config.lift_curve_slope * alpha
+        self.stalled = abs(alpha) > self.config.stall_angle
+        if self.stalled:
+            lift_coefficient = 0.0
+        else:
+            lift_coefficient = self.config.lift_curve_slope * alpha
         drag_coefficient = self.config.parasite_drag_coefficient \
             + self.config.induced_drag_factor * lift_coefficient**2
         
@@ -115,8 +141,31 @@ class Aircraft2D:
         gravity = np.array([0.0, -self.environment.gravity * self.config.mass])
         thrust = self.thrust * vel_unit  # assume in direction of velocity
 
+        # Calculate wheel drag
+        if self.on_ground:
+            wheel_drag = -self.config.wheel_drag_coefficient * self.vel
+        else:
+            wheel_drag = np.array([0.0, 0.0])
+
+        # Store forces
+        self.forces["lift"] = lift
+        self.forces["drag"] = drag
+        self.forces["gravity"] = gravity
+        self.forces["thrust"] = thrust
+        self.forces["wheel_drag"] = wheel_drag
+        return lift + drag + gravity + thrust + wheel_drag
+    
+    def step(self, dt: float) -> None:
+        """Perform a simulation step
+
+        Args:
+            dt (float): timestep [s]
+        """
+        if self.crashed:
+            return
+        
         # Calculate acceleration
-        total_force = lift + drag + gravity + thrust
+        total_force = self.calculate_forces()
         acceleration = total_force / self.config.mass
 
         # Update velocity and position
@@ -126,6 +175,13 @@ class Aircraft2D:
         # Update pitch angle based on control surface angle
         pitch_rate = self.config.pitch_rate_gain * self.control_surface_angle
         self.pitch += pitch_rate * dt
+        self.pitch = np.clip(self.pitch, -np.pi / 2, np.pi / 2)  # limit pitch angle
+
+        # Check crash
+        if not self.on_ground and self.pos[1] <= 0.0 and \
+            abs(self.vel[1]) > self.config.max_vertical_landing_speed:
+            self.crashed = True
+            self.vel = np.array([0.0, 0.0])
 
         # Check ground contact
         if self.pos[1] < 0.0:
@@ -134,5 +190,28 @@ class Aircraft2D:
                 self.vel[1] = 0.0
         self.on_ground = self.pos[1] <= 0.0 and self.vel[1] <= 1e-9
 
-    def draw(self):
-        pass
+    def draw(self, screen: pg.Surface, camera_pos: np.ndarray) -> None:
+        """Draw the aircraft on screen
+
+        Args:
+            screen (pg.Surface): PyGame screen
+            camera_pos (np.ndarray): camera position in world coordinates
+        """
+        # Define local aircraft shape
+        length = 40
+        width = 20
+        points = np.array([
+            [length / 2, 0],
+            [- length / 2, -width / 2],
+            [- length / 2, width / 2]
+        ])
+        
+        # Rotate points based on pitch angle
+        cos_pitch, sin_pitch = np.cos(self.pitch), np.sin(self.pitch)
+        rot_matrix = np.array([[cos_pitch, -sin_pitch], [sin_pitch, cos_pitch]])
+        rotated_points = points @ rot_matrix.T
+        screen_points = [world_to_screen(self.pos + point, camera_pos, screen.get_size()) 
+                         for point in rotated_points]
+        
+        # Draw aircraft shape
+        pg.draw.polygon(screen, (255, 255, 255), screen_points)

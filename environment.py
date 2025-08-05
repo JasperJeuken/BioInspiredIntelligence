@@ -1,3 +1,4 @@
+"""Environment data"""
 from dataclasses import dataclass
 
 
