@@ -1,3 +1,6 @@
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+
 import pygame as pg
 import numpy as np
 
@@ -36,8 +39,9 @@ def main():
     aircraft = [Aircraft2D(config, environment) for _ in range(50)]
 
     # Initialize terrain
-    oceans = [(50, 100), (200, 300), (400, 450)]
-    terrain = Terrain(oceans)
+    oceans = [(2300, 5000)]
+    runways = [(200, 2000), (5200, 7000)]
+    terrain = Terrain(oceans, runways)
 
     # Main loop
     running = True
@@ -47,6 +51,17 @@ def main():
         dt = clock.tick(60) / 1000
         fps = clock.get_fps()
 
+        # Testing
+        pressed_keys = pg.key.get_pressed()
+        if pressed_keys[pg.K_w]:
+            aircraft[0].thrust_setting += 0.3 * dt
+        if pressed_keys[pg.K_s]:
+            aircraft[0].thrust_setting -= 0.3 * dt
+        if pressed_keys[pg.K_a]:
+            aircraft[0].control_surface_angle += 0.1 * dt
+        if pressed_keys[pg.K_d]:
+            aircraft[0].control_surface_angle -= 0.1 * dt
+
         # Update aircraft state
         for ac in aircraft:
             ac.step(dt)
@@ -54,11 +69,11 @@ def main():
         camera_pos = np.array([max_x, camera_pos[1]])
 
         # Draw FPS and max X position
-        text = font.render(f'FPS: {fps:.2f}', True, (0, 0, 0))
+        text = font.render(f'FPS: {fps:.0f}', True, (0, 0, 0))
         screen.blit(text, (10, 10))
         text = font.render(f'No. of aircraft: {len(aircraft)}', True, (0, 0, 0))
         screen.blit(text, (10, 30))
-        text = font.render(f'Best X: {max_x:.2f}', True, (0, 0, 0))
+        text = font.render(f'Best X: {max_x:.0f}', True, (0, 0, 0))
         screen.blit(text, (10, 50))
 
         # Draw terrain
