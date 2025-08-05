@@ -40,6 +40,7 @@ class Aircraft2D:
         """
         self.config: AircraftConfig = config
         self.environment: Environment = environment
+        self.color: tuple[int, int, int] = tuple(np.random.randint(0, 256, size=3))
 
         # State variables
         self._thrust: float = 0.0                    # [-] thrust setting (0.0 to 1.0)
@@ -214,4 +215,5 @@ class Aircraft2D:
                          for point in rotated_points]
         
         # Draw aircraft shape
-        pg.draw.polygon(screen, (255, 255, 255), screen_points)
+        pg.draw.polygon(screen, self.color, screen_points)
+        pg.draw.polygon(screen, (0, 0, 0), screen_points, width=2)
