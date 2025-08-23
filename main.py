@@ -30,7 +30,8 @@ def main():
         max_control_surface_angle = np.radians(15.0),
         wheel_drag_coefficient = 0.1,
         stall_angle = np.radians(15.0),
-        max_vertical_landing_speed = 10.0
+        max_vertical_landing_speed = 10.0,
+        control_effectiveness_speed = 50.0
     )
     environment = Environment(
         air_density = 1.225,

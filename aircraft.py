@@ -11,17 +11,18 @@ from environment import Environment
 
 @dataclass
 class AircraftConfig:
-    mass: float                        # [kg]
-    max_thrust: float                  # [N]
-    reference_area: float              # [m^2]
-    lift_curve_slope: float            # [1/rad]
-    parasite_drag_coefficient: float   # [-]
-    induced_drag_factor: float         # [-]
-    pitch_rate_gain: float             # [rad/s/rad]
-    max_control_surface_angle: float   # [rad]
-    wheel_drag_coefficient: float      # [-]
-    stall_angle: float                 # [rad]
-    max_vertical_landing_speed: float  # [m/s]
+    mass: float                         # [kg]
+    max_thrust: float                   # [N]
+    reference_area: float               # [m^2]
+    lift_curve_slope: float             # [1/rad]
+    parasite_drag_coefficient: float    # [-]
+    induced_drag_factor: float          # [-]
+    pitch_rate_gain: float              # [rad/s/rad]
+    max_control_surface_angle: float    # [rad]
+    wheel_drag_coefficient: float       # [-]
+    stall_angle: float                  # [rad]
+    max_vertical_landing_speed: float   # [m/s]
+    control_effectiveness_speed: float  # [m/s]
 
 
 FORCES = Literal['lift', 'drag', 'gravity', 'thrust', 'wheel_drag']
@@ -48,6 +49,7 @@ class Aircraft2D:
         self.pos: np.ndarray = np.array([0.0, 0.0])  # [m] position
         self.vel: np.ndarray = np.array([0.0, 0.0])  # [m/s] velocity
         self.pitch: float = 0.0                      # [rad] pitch angle
+        self.pitch_rate: float = 0.0                 # [rad/s] pitch rate
         self.forces: dict[FORCES, np.ndarray] = {
             "lift": np.array([0.0, 0.0]),
             "drag": np.array([0.0, 0.0]),
@@ -174,8 +176,9 @@ class Aircraft2D:
         self.pos += self.vel * dt
 
         # Update pitch angle based on control surface angle
-        pitch_rate = self.config.pitch_rate_gain * self.control_surface_angle
-        self.pitch += pitch_rate * dt
+        effectiveness = self.airspeed / (self.airspeed + self.config.control_effectiveness_speed)
+        self.pitch_rate = self.config.pitch_rate_gain * self.control_surface_angle * effectiveness
+        self.pitch += self.pitch_rate * dt
         self.pitch = np.clip(self.pitch, -np.pi / 2, np.pi / 2)  # limit pitch angle
 
         # Check crash
