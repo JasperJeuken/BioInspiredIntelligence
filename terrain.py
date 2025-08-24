@@ -10,6 +10,7 @@ class Terrain:
     def __init__(self,
                  oceans: list[tuple[int, int]],
                  runways: list[tuple[int, int]],
+                 mountains: list[tuple[int, int, int]],
                  ocean_color: tuple[int, int, int] = (0, 0, 255),
                  runway_color: tuple[int, int, int] = (100, 100, 100),
                  ground_color: tuple[int, int, int] = (50, 200, 50)) -> None:
@@ -18,12 +19,14 @@ class Terrain:
         Args:
             oceans (list[tuple[int, int]]): (start, end) tuples for ocean regions
             runways (list[tuple[int, int]]): (start, end) tuples for runway regions
+            mountains (list[tuple[int, int, int]]): (start, end, height) tuples for mountains
             ocean_color (tuple[int, int, int], optional): ocean color. Defaults to (0, 0, 255)
             runway_color (tuple[int, int, int], optional): runway color. Defaults to (200, 200, 200)
             ground_color (tuple[int, int, int], optional): ground color. Defaults to (50, 200, 50)
         """
         self.oceans: list[tuple[int, int]] = oceans
         self.runways: list[tuple[int, int]] = runways
+        self.mountains: list[tuple[int, int, int]] = mountains
 
         self.ocean_color: tuple[int, int, int] = ocean_color
         self.runway_color: tuple[int, int, int] = runway_color
@@ -51,6 +54,28 @@ class Terrain:
         """
         return any(start <= x <= end for start, end in self.runways)
     
+    def hit_mountain(self, x: int | float, y: int | float) -> bool:
+        """Whether the given (x, y) position hits a mountain
+
+        Args:
+            x (int | float): x-coordinate (world position)
+            y (int | float): y-coordinate (world position)
+
+        Returns:
+            bool: whether the (x, y) position hits a mountain
+        """
+        for start, end, height in self.mountains:
+            if x < start or x > end:
+                continue
+            peak_x = (start + end) / 2
+            if x <= peak_x:
+                mountain_y = (x - start) / (peak_x - start) * height
+            else:
+                mountain_y = (end - x) / (end - peak_x) * height
+            if y <= mountain_y:
+                return True
+        return False
+    
     def _draw_collection(self, screen: pg.Surface, camera_pos: np.ndarray,
                          collection: list[tuple[int, int]], color: tuple[int, int, int]) -> None:
         """Draw a collection of regions on the screen
@@ -69,6 +94,24 @@ class Terrain:
             x_end, _ = world_to_screen(np.array([end, 0.0]), camera_pos, screen.get_size())
             pg.draw.rect(screen, color,
                             (x_start, y_ground, x_end - x_start, screen.get_height() - y_ground))
+        
+    def _draw_mountains(self, screen: pg.Surface, camera_pos: np.ndarray) -> None:
+        """Draw mountains on the screen
+
+        Args:
+            screen (pg.Surface): PyGame screen
+            camera_pos (np.ndarray): camera position in world coordinates
+        """
+        y_ground = world_to_screen(np.array([0.0, 0.0]), camera_pos, screen.get_size())[1]
+        for start, end, height in self.mountains:
+            x_start = max(start - camera_pos[0], 0)
+            x_end = min(end - camera_pos[0], screen.get_width())
+            x_start, _ = world_to_screen(np.array([start, 0.0]), camera_pos, screen.get_size())
+            x_end, _ = world_to_screen(np.array([end, 0.0]), camera_pos, screen.get_size())
+            peak_x = (x_start + x_end) / 2
+            peak_y = y_ground - height
+            points = [(x_start, y_ground), (peak_x, peak_y), (x_end, y_ground)]
+            pg.draw.polygon(screen, self.ground_color, points)
     
     def draw(self, screen: pg.Surface, camera_pos: np.ndarray) -> None:
         """Draw the terrain on the screen
@@ -85,6 +128,7 @@ class Terrain:
         # Draw oceans and runways
         self._draw_collection(screen, camera_pos, self.oceans, self.ocean_color)
         self._draw_collection(screen, camera_pos, self.runways, self.runway_color)
+        self._draw_mountains(screen, camera_pos)
 
         # Draw equally spaced markers
         left = camera_pos[0] - screen.get_width() / 2 - 200

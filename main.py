@@ -29,7 +29,8 @@ def main():
     # Set terrain and environment parameters
     oceans = [(2000, 5000)]
     runways = [(-400, 1400), (5600, 7400)]
-    terrain = Terrain(oceans, runways)
+    mountains = []
+    terrain = Terrain(oceans, runways, mountains)
     environment = Environment(
         air_density = 1.225,
         gravity = 9.81
@@ -62,6 +63,7 @@ def main():
     
     aircraft = reset_aircraft()
     best_scores = []
+    best_paths = []
     time = 0.0
     sim_speed = 5
 
@@ -134,7 +136,7 @@ def main():
         if time >= episode_time or all(ac.crashed for ac in aircraft):
             # Check if aircraft landed correctly
             if any([ac.on_ground and not ac.crashed and ac.vel[0] < 1.0 \
-                and ac.pos[0] > terrain.runways[1][0] for ac in aircraft]):
+                and ac.pos[0] > terrain.runways[1][0] for ac in aircraft]) or ga.generation >= 100:
                 running = False
 
             # Calculate scores for each aircraft
@@ -147,6 +149,9 @@ def main():
             print(f'Generation {ga.generation} best score: {max(scores):.2f}')
             best_scores.append(max(scores))
 
+            # Store best path
+            best_paths.append(np.array(aircraft[np.argmax(scores)].pos_history))
+
             # Create next generation
             controllers = ga.next_generation(controllers, scores)
             aircraft = reset_aircraft()
@@ -154,8 +159,9 @@ def main():
             episode_time += 1.0
             episode_time = min(episode_time, 85.0)
 
-    # Save best scores
+    # Save best scores and paths
     np.savez(os.path.join(OUT_FOLDER, 'generation_scores.npz'), np.array(best_scores))
+    np.savez(os.path.join(OUT_FOLDER, 'generation_paths.npz'), np.array(best_paths))
 
     pg.quit()
 

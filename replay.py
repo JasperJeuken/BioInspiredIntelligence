@@ -26,7 +26,8 @@ def main():
     # Set terrain and environment parameters
     oceans = [(2000, 5000)]
     runways = [(-400, 1400), (5600, 7400)]
-    terrain = Terrain(oceans, runways)
+    mountains = []
+    terrain = Terrain(oceans, runways, mountains)
     environment = Environment(
         air_density = 1.225,
         gravity = 9.81
@@ -61,6 +62,7 @@ def main():
     thrust_history = []
     control_surface_history = []
     brake_history = []
+    time_history = []
 
     # Main loop
     running = True
@@ -115,6 +117,7 @@ def main():
             running = False
 
         # Store history
+        time_history.append(time)
         pos_history.append(aircraft.pos.copy())
         vel_history.append(aircraft.vel.copy())
         pitch_history.append(aircraft.pitch)
@@ -130,6 +133,7 @@ def main():
     control_surface_history = np.array(control_surface_history)
     brake_history = np.array(brake_history)
     np.savez(os.path.join(os.path.dirname(FILE), 'replay.npz'),
+        time=time_history,
         pos=pos_history,
         vel=vel_history,
         pitch=pitch_history,

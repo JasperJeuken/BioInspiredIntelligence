@@ -68,6 +68,7 @@ class Aircraft2D:
         self.stalled: bool = False
         self.on_ground: bool = True
         self.crashed: bool = False
+        self.pos_history: list[np.ndarray] = []
 
     @property
     def thrust_setting(self) -> float:
@@ -209,9 +210,13 @@ class Aircraft2D:
         self.on_ground = now_on_ground
 
         # Check terrain collision
-        if self.on_ground and not self.terrain.is_runway(self.pos[0]):
+        if (self.on_ground and not self.terrain.is_runway(self.pos[0])) or \
+            self.terrain.hit_mountain(self.pos[0], self.pos[1]):
             self.crashed = True
             self.vel = np.array([0.0, 0.0])
+
+        # Update position history
+        self.pos_history.append(self.pos.copy())
 
     def draw(self, screen: pg.Surface, camera_pos: np.ndarray, font: pg.font.Font) -> None:
         """Draw the aircraft on screen
