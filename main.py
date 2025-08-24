@@ -15,9 +15,7 @@ from controller import Controller
 OUT_FOLDER = os.path.join('out', time.strftime('%Y%m%d-%H%M%S'))
 os.makedirs(OUT_FOLDER, exist_ok=True)
 
-
 np.random.seed(1)
-
 
 def main():
     # Initialize PyGame
@@ -51,7 +49,7 @@ def main():
         stall_angle = np.radians(15.0),
         max_vertical_landing_speed = 10.0,
         control_effectiveness_speed = 50.0,
-        max_wheel_brake_deceleration = 8.0
+        max_wheel_brake_force = 15000
     )
 
     # Create GA
@@ -63,7 +61,9 @@ def main():
         return [Aircraft2D(config, environment, terrain) for _ in range(ga.population_size)]
     
     aircraft = reset_aircraft()
+    best_scores = []
     time = 0.0
+    sim_speed = 5
 
     # Main loop
     running = True
@@ -71,28 +71,29 @@ def main():
 
         screen.fill((135, 206, 235))
         dt = clock.tick(60) / 1000
-        time += dt
+        time += dt * sim_speed
         fps = clock.get_fps()
 
         # Control aircraft using GA controllers
         for ac, ctrl in zip(aircraft, controllers):
-            state = np.array([
-                ac.pos[0],
-                ac.pos[1],
-                ac.vel[0],
-                ac.vel[1],
-                ac.pitch,
-                ac.pitch_rate
-            ])
-            thrust_cmd, control_surface_cmd, brake_cmd = ctrl.forward(state)
-            ac.thrust_setting = thrust_cmd
-            ac.control_surface_angle = control_surface_cmd
-            ac.wheel_brake = brake_cmd
-            ac.step(dt)
+            for _ in range(sim_speed):
+                state = np.array([
+                    ac.pos[0],
+                    ac.pos[1],
+                    ac.vel[0],
+                    ac.vel[1],
+                    ac.pitch,
+                    ac.pitch_rate
+                ])
+                thrust_cmd, control_surface_cmd, brake_cmd = ctrl.forward(state)
+                ac.thrust_setting = thrust_cmd
+                ac.control_surface_angle = control_surface_cmd
+                ac.wheel_brake = brake_cmd
+                ac.step(dt)
             
         # Update camera position (follow best aircraft)
         max_x = max(ac.pos[0] for ac in aircraft if not ac.crashed)
-        camera_pos = np.array([max_x, camera_pos[1]])
+        camera_pos = np.array([min(max_x, terrain.runways[1][1]), camera_pos[1]])
 
         # Draw terrain
         terrain.draw(screen, camera_pos)
@@ -112,6 +113,15 @@ def main():
         screen.blit(text, (10, 70))
         text = font.render(f'Time: {time:.1f}/{episode_time:.1f} s', True, (0, 0, 0))
         screen.blit(text, (10, 90))
+        text = font.render(f'Sim. speed: {sim_speed}x', True, (0, 0, 0))
+        screen.blit(text, (10, 110))
+
+        # Update simulation speed with keys
+        pressed_keys = pg.key.get_pressed()
+        if pressed_keys[pg.K_UP]:
+            sim_speed = min(10, sim_speed + 1)
+        if pressed_keys[pg.K_DOWN]:
+            sim_speed = max(1, sim_speed - 1)
 
         # Handle events
         pg.display.flip()
@@ -121,8 +131,13 @@ def main():
             if event.type == pg.VIDEORESIZE:
                 screen = pg.display.set_mode((event.w, event.h), pg.RESIZABLE)
 
-        # Check episode end
         if time >= episode_time or all(ac.crashed for ac in aircraft):
+            # Check if aircraft landed correctly
+            if any([ac.on_ground and not ac.crashed and ac.vel[0] < 1.0 \
+                and ac.pos[0] > terrain.runways[1][0] for ac in aircraft]):
+                running = False
+                continue
+
             # Calculate scores for each aircraft
             scores = ga.evaluate(aircraft, terrain)
             
@@ -131,13 +146,17 @@ def main():
             best_controller = controllers[np.argmax(scores)]
             best_controller.save(os.path.join(OUT_FOLDER, filename))
             print(f'Generation {ga.generation} best score: {max(scores):.2f}')
+            best_scores.append(max(scores))
 
             # Create next generation
             controllers = ga.next_generation(controllers, scores)
             aircraft = reset_aircraft()
             time = 0.0
             episode_time += 1.0
-            episode_time = min(episode_time, 90.0)
+            episode_time = min(episode_time, 85.0)
+
+    # Save best scores
+    np.savez(os.path.join(OUT_FOLDER, 'generation_scores.npz'), np.array(best_scores))
 
     pg.quit()
 

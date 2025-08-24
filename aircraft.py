@@ -15,19 +15,19 @@ from terrain import Terrain
 
 @dataclass
 class AircraftConfig:
-    mass: float                          # [kg]
-    max_thrust: float                    # [N]
-    reference_area: float                # [m^2]
-    lift_curve_slope: float              # [1/rad]
-    parasite_drag_coefficient: float     # [-]
-    induced_drag_factor: float           # [-]
-    pitch_rate_gain: float               # [rad/s/rad]
-    max_control_surface_angle: float     # [rad]
-    wheel_drag_coefficient: float        # [-]
-    stall_angle: float                   # [rad]
-    max_vertical_landing_speed: float    # [m/s]
-    control_effectiveness_speed: float   # [m/s]
-    max_wheel_brake_deceleration: float  # [m/s^2]
+    mass: float                         # [kg]
+    max_thrust: float                   # [N]
+    reference_area: float               # [m^2]
+    lift_curve_slope: float             # [1/rad]
+    parasite_drag_coefficient: float    # [-]
+    induced_drag_factor: float          # [-]
+    pitch_rate_gain: float              # [rad/s/rad]
+    max_control_surface_angle: float    # [rad]
+    wheel_drag_coefficient: float       # [-]
+    stall_angle: float                  # [rad]
+    max_vertical_landing_speed: float   # [m/s]
+    control_effectiveness_speed: float  # [m/s]
+    max_wheel_brake_force: float        # [N]
 
 
 FORCES = Literal['lift', 'drag', 'gravity', 'thrust', 'wheel_drag']
@@ -153,15 +153,11 @@ class Aircraft2D:
         thrust = self.thrust * vel_unit  # assume in direction of velocity
 
         # Calculate wheel brake
-        if self.on_ground:
-            wheel_drag = self.config.max_wheel_brake_deceleration * self.config.mass * \
-                np.clip(self.wheel_brake, 0.0, 1.0) * -vel_unit
+        if self.on_ground and self.vel[0] > 1e-5 and self.pos[0] > self.terrain.runways[0][1]:
+            wheel_drag = self.wheel_brake * self.config.max_wheel_brake_force
+            wheel_drag = - wheel_drag * np.array([1.0, 0.0])
         else:
             wheel_drag = np.array([0.0, 0.0])
-        
-        # Calculate thrust reverse
-        if self.on_ground and self.thrust_setting < 0.01 and abs(v) > 3.0:
-            thrust = -0.5 * self.config.max_thrust * vel_unit
 
         # Store forces
         self.forces["lift"] = lift

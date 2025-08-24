@@ -63,6 +63,17 @@ class GeneticAlgorithm:
         for i in range(elite_count):
             new_controllers.append(controllers[sorted_idcs[i]])
 
+        # Add mutations of best controller (for landing)
+        best_controller = controllers[sorted_idcs[0]]
+        for _ in range(elite_count):
+            mutant = Controller()
+            mutant.w1 = np.copy(best_controller.w1)
+            mutant.b1 = np.copy(best_controller.b1)
+            mutant.w2 = np.copy(best_controller.w2)
+            mutant.b2 = np.copy(best_controller.b2)
+            mutant.mutate(self.mutation_rate * 2)
+            new_controllers.append(mutant)
+
         # Crossover and mutate elites
         while len(new_controllers) < self.population_size:
             parent1, parent2 = random.sample(new_controllers[:elite_count], 2)

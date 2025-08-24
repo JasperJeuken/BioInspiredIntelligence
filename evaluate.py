@@ -8,8 +8,7 @@ from terrain import Terrain
 CRASH_PENALTY = 30000
 STALL_PENALTY = 10000
 TAKEOFF_BONUS = 5000
-LAND_BONUS = 200000
-LAND_FAIL_PENALTY = 20000
+LAND_BONUS = 10000
 PHASE_CAP = 20000
 
 
@@ -43,7 +42,8 @@ def evaluate_aircraft(aircraft: Aircraft2D, terrain: Terrain) -> float:
     score = 0.0
     if aircraft.crashed:
         score -= CRASH_PENALTY
-        return score
+        if terrain.runways[1][1] - 10 < x < terrain.runways[1][1] + 10:
+            score += CRASH_PENALTY  # negate crash penalty if crash on landing runway
     if aircraft.stalled:
         score -= STALL_PENALTY
 
@@ -59,29 +59,30 @@ def evaluate_aircraft(aircraft: Aircraft2D, terrain: Terrain) -> float:
         # Cruise
         score += PHASE_CAP
         phase_score += 2.0 * vx
-        phase_score -= abs(y - 200.0) * 3.0
+        phase_score -= abs(y - 100.0) * 5.0
+        phase_score -= abs(vy - 90) * 2
         score += np.clip(phase_score, -PHASE_CAP, PHASE_CAP)
     elif phase == 2:
         # Approach
         score += 2 * PHASE_CAP
         target_alt = (terrain.runways[1][0] - x) / approach_dist * 200 \
             if x < terrain.runways[1][0] else 0
-        phase_score -= abs(y - target_alt) * 5.0
+        phase_score -= abs(y - target_alt) * 10.0
         score += np.clip(phase_score, -PHASE_CAP, PHASE_CAP)
     elif phase == 3:
         # Landing
         score += 3 * PHASE_CAP
         if not aircraft.on_ground:
-            phase_score -= y * 10.0
-            phase_score -= abs(vy) * 5.0
+            phase_score -= 1000
+            phase_score -= y * 100.0
+            phase_score -= abs(terrain.runways[1][0] - x)
         else:
             score += LAND_BONUS
-        if vx < 5.0:
-            score += LAND_BONUS
+            phase_score -= abs(vx) * 20.0
         score += np.clip(phase_score, -PHASE_CAP, PHASE_CAP)
     elif phase == 4:
         # Overshoot
-        score -= 10000 + 50 * (x - terrain.runways[1][1])
+        score -= 20000 + 50 * (x - terrain.runways[1][1])
     else:
         raise ValueError("Invalid flight phase")
     
