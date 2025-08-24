@@ -136,7 +136,6 @@ def main():
             if any([ac.on_ground and not ac.crashed and ac.vel[0] < 1.0 \
                 and ac.pos[0] > terrain.runways[1][0] for ac in aircraft]):
                 running = False
-                continue
 
             # Calculate scores for each aircraft
             scores = ga.evaluate(aircraft, terrain)

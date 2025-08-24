@@ -203,7 +203,10 @@ class Aircraft2D:
             self.pos[1] = 0.0
             if self.vel[1] < 0.0:
                 self.vel[1] = 0.0
-        self.on_ground = self.pos[1] <= 0.0 and self.vel[1] <= 1e-9
+        now_on_ground = self.pos[1] <= 0.0 and self.vel[1] <= 1e-9
+        if not self.on_ground and now_on_ground and abs(self.pitch) > 0.2:
+            self.crashed = True
+        self.on_ground = now_on_ground
 
         # Check terrain collision
         if self.on_ground and not self.terrain.is_runway(self.pos[0]):
