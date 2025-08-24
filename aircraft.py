@@ -15,18 +15,19 @@ from terrain import Terrain
 
 @dataclass
 class AircraftConfig:
-    mass: float                         # [kg]
-    max_thrust: float                   # [N]
-    reference_area: float               # [m^2]
-    lift_curve_slope: float             # [1/rad]
-    parasite_drag_coefficient: float    # [-]
-    induced_drag_factor: float          # [-]
-    pitch_rate_gain: float              # [rad/s/rad]
-    max_control_surface_angle: float    # [rad]
-    wheel_drag_coefficient: float       # [-]
-    stall_angle: float                  # [rad]
-    max_vertical_landing_speed: float   # [m/s]
-    control_effectiveness_speed: float  # [m/s]
+    mass: float                          # [kg]
+    max_thrust: float                    # [N]
+    reference_area: float                # [m^2]
+    lift_curve_slope: float              # [1/rad]
+    parasite_drag_coefficient: float     # [-]
+    induced_drag_factor: float           # [-]
+    pitch_rate_gain: float               # [rad/s/rad]
+    max_control_surface_angle: float     # [rad]
+    wheel_drag_coefficient: float        # [-]
+    stall_angle: float                   # [rad]
+    max_vertical_landing_speed: float    # [m/s]
+    control_effectiveness_speed: float   # [m/s]
+    max_wheel_brake_deceleration: float  # [m/s^2]
 
 
 FORCES = Literal['lift', 'drag', 'gravity', 'thrust', 'wheel_drag']
@@ -52,6 +53,7 @@ class Aircraft2D:
         # State variables
         self._thrust: float = 0.0                    # [-] thrust setting (0.0 to 1.0)
         self._control_surface_angle: float = 0.0     # [rad] flap angle
+        self.wheel_brake: float = 0.0                # [-] wheel brake setting (0.0 to 1.0)
         self.pos: np.ndarray = np.array([0.0, 0.0])  # [m] position
         self.vel: np.ndarray = np.array([0.0, 0.0])  # [m/s] velocity
         self.pitch: float = 0.0                      # [rad] pitch angle
@@ -150,9 +152,10 @@ class Aircraft2D:
         gravity = np.array([0.0, -self.environment.gravity * self.config.mass])
         thrust = self.thrust * vel_unit  # assume in direction of velocity
 
-        # Calculate wheel drag
+        # Calculate wheel brake
         if self.on_ground:
-            wheel_drag = -self.config.wheel_drag_coefficient * self.vel
+            wheel_drag = self.config.max_wheel_brake_deceleration * self.config.mass * \
+                np.clip(self.wheel_brake, 0.0, 1.0) * -vel_unit
         else:
             wheel_drag = np.array([0.0, 0.0])
         

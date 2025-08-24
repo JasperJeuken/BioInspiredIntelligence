@@ -50,7 +50,8 @@ def main():
         wheel_drag_coefficient = 0.1,
         stall_angle = np.radians(15.0),
         max_vertical_landing_speed = 10.0,
-        control_effectiveness_speed = 50.0
+        control_effectiveness_speed = 50.0,
+        max_wheel_brake_deceleration = 8.0
     )
 
     # Create GA
@@ -83,11 +84,12 @@ def main():
                 ac.pitch,
                 ac.pitch_rate
             ])
-            thrust_cmd, control_surface_cmd = ctrl.forward(state)
+            thrust_cmd, control_surface_cmd, brake_cmd = ctrl.forward(state)
             ac.thrust_setting = thrust_cmd
             ac.control_surface_angle = control_surface_cmd
+            ac.wheel_brake = brake_cmd
             ac.step(dt)
-
+            
         # Update camera position (follow best aircraft)
         max_x = max(ac.pos[0] for ac in aircraft if not ac.crashed)
         camera_pos = np.array([max_x, camera_pos[1]])
