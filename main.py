@@ -1,4 +1,5 @@
 import os
+import time
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 
 import pygame as pg
@@ -7,6 +8,15 @@ import numpy as np
 from aircraft import Aircraft2D, AircraftConfig
 from environment import Environment
 from terrain import Terrain
+from genetic import GeneticAlgorithm
+from controller import Controller
+
+
+OUT_FOLDER = os.path.join('out', time.strftime('%Y%m%d-%H%M%S'))
+os.makedirs(OUT_FOLDER, exist_ok=True)
+
+
+np.random.seed(1)
 
 
 def main():
@@ -18,7 +28,16 @@ def main():
     font = pg.font.Font(None, 24)
     pg.display.set_caption('Aircraft simulation')
 
-    # Initialize aircraft
+    # Set terrain and environment parameters
+    oceans = [(2000, 5000)]
+    runways = [(-400, 1400), (5600, 7400)]
+    terrain = Terrain(oceans, runways)
+    environment = Environment(
+        air_density = 1.225,
+        gravity = 9.81
+    )
+
+    # Set aircraft parameters
     config = AircraftConfig(
         mass = 1000.0,
         max_thrust = 5000.0,
@@ -33,16 +52,17 @@ def main():
         max_vertical_landing_speed = 10.0,
         control_effectiveness_speed = 50.0
     )
-    environment = Environment(
-        air_density = 1.225,
-        gravity = 9.81
-    )
-    aircraft = [Aircraft2D(config, environment) for _ in range(50)]
 
-    # Initialize terrain
-    oceans = [(2300, 5000)]
-    runways = [(200, 2000), (5200, 7000)]
-    terrain = Terrain(oceans, runways)
+    # Create GA
+    ga = GeneticAlgorithm(population_size=200, elite_fraction=0.1, mutation_rate=0.09)
+    controllers = [Controller() for _ in range(ga.population_size)]
+    episode_time = 30.0  # [s]
+
+    def reset_aircraft() -> list[Aircraft2D]:
+        return [Aircraft2D(config, environment, terrain) for _ in range(ga.population_size)]
+    
+    aircraft = reset_aircraft()
+    time = 0.0
 
     # Main loop
     running = True
@@ -50,39 +70,46 @@ def main():
 
         screen.fill((135, 206, 235))
         dt = clock.tick(60) / 1000
+        time += dt
         fps = clock.get_fps()
 
-        # Testing
-        pressed_keys = pg.key.get_pressed()
-        if pressed_keys[pg.K_w]:
-            aircraft[0].thrust_setting += 0.3 * dt
-        if pressed_keys[pg.K_s]:
-            aircraft[0].thrust_setting -= 0.3 * dt
-        if pressed_keys[pg.K_a]:
-            aircraft[0].control_surface_angle += 0.1 * dt
-        if pressed_keys[pg.K_d]:
-            aircraft[0].control_surface_angle -= 0.1 * dt
-
-        # Update aircraft state
-        for ac in aircraft:
+        # Control aircraft using GA controllers
+        for ac, ctrl in zip(aircraft, controllers):
+            state = np.array([
+                ac.pos[0],
+                ac.pos[1],
+                ac.vel[0],
+                ac.vel[1],
+                ac.pitch,
+                ac.pitch_rate
+            ])
+            thrust_cmd, control_surface_cmd = ctrl.forward(state)
+            ac.thrust_setting = thrust_cmd
+            ac.control_surface_angle = control_surface_cmd
             ac.step(dt)
-        max_x = max(ac.pos[0] for ac in aircraft)
-        camera_pos = np.array([max_x, camera_pos[1]])
 
-        # Draw FPS and max X position
-        text = font.render(f'FPS: {fps:.0f}', True, (0, 0, 0))
-        screen.blit(text, (10, 10))
-        text = font.render(f'No. of aircraft: {len(aircraft)}', True, (0, 0, 0))
-        screen.blit(text, (10, 30))
-        text = font.render(f'Best X: {max_x:.0f}', True, (0, 0, 0))
-        screen.blit(text, (10, 50))
+        # Update camera position (follow best aircraft)
+        max_x = max(ac.pos[0] for ac in aircraft if not ac.crashed)
+        camera_pos = np.array([max_x, camera_pos[1]])
 
         # Draw terrain
         terrain.draw(screen, camera_pos)
 
         # Draw aircraft
         for ac in aircraft:
-            ac.draw(screen, camera_pos)
+            ac.draw(screen, camera_pos, font)
+
+        # Draw FPS and max X position
+        text = font.render(f'FPS: {fps:.0f}', True, (0, 0, 0))
+        screen.blit(text, (10, 10))
+        text = font.render(f'No. of aircraft: {len(aircraft)}', True, (0, 0, 0))
+        screen.blit(text, (10, 30))
+        text = font.render(f'Generation: {ga.generation}', True, (0, 0, 0))
+        screen.blit(text, (10, 50))
+        text = font.render(f'Best X: {max_x:.0f}', True, (0, 0, 0))
+        screen.blit(text, (10, 70))
+        text = font.render(f'Time: {time:.1f}/{episode_time:.1f} s', True, (0, 0, 0))
+        screen.blit(text, (10, 90))
 
         # Handle events
         pg.display.flip()
@@ -91,6 +118,24 @@ def main():
                 running = False
             if event.type == pg.VIDEORESIZE:
                 screen = pg.display.set_mode((event.w, event.h), pg.RESIZABLE)
+
+        # Check episode end
+        if time >= episode_time or all(ac.crashed for ac in aircraft):
+            # Calculate scores for each aircraft
+            scores = ga.evaluate(aircraft, terrain)
+            
+            # Save best controller
+            filename = f'best_gen{ga.generation}.npz'
+            best_controller = controllers[np.argmax(scores)]
+            best_controller.save(os.path.join(OUT_FOLDER, filename))
+            print(f'Generation {ga.generation} best score: {max(scores):.2f}')
+
+            # Create next generation
+            controllers = ga.next_generation(controllers, scores)
+            aircraft = reset_aircraft()
+            time = 0.0
+            episode_time += 1.0
+            episode_time = min(episode_time, 90.0)
 
     pg.quit()
 

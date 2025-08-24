@@ -1,4 +1,7 @@
 """2D aircraft model"""
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+
 import numpy as np
 import pygame as pg
 
@@ -7,6 +10,7 @@ from typing import Literal
 
 from camera import world_to_screen
 from environment import Environment
+from terrain import Terrain
 
 
 @dataclass
@@ -32,15 +36,17 @@ class Aircraft2D:
     """2D aircraft model for simulation
     """
 
-    def __init__(self, config: AircraftConfig, environment: Environment) -> None:
+    def __init__(self, config: AircraftConfig, environment: Environment, terrain: Terrain) -> None:
         """Initialize the aircraft with specified parameters
 
         Args:
             config (AircraftConfig): aircraft parameters
             environment (Environment): environment parameters
+            terrain (Terrain): terrain parameters
         """
         self.config: AircraftConfig = config
         self.environment: Environment = environment
+        self.terrain: Terrain = terrain
         self.color: tuple[int, int, int] = tuple(np.random.randint(0, 256, size=3))
 
         # State variables
@@ -149,6 +155,10 @@ class Aircraft2D:
             wheel_drag = -self.config.wheel_drag_coefficient * self.vel
         else:
             wheel_drag = np.array([0.0, 0.0])
+        
+        # Calculate thrust reverse
+        if self.on_ground and self.thrust_setting < 0.01 and abs(v) > 3.0:
+            thrust = -0.5 * self.config.max_thrust * vel_unit
 
         # Store forces
         self.forces["lift"] = lift
@@ -180,6 +190,8 @@ class Aircraft2D:
         self.pitch_rate = self.config.pitch_rate_gain * self.control_surface_angle * effectiveness
         self.pitch += self.pitch_rate * dt
         self.pitch = np.clip(self.pitch, -np.pi / 2, np.pi / 2)  # limit pitch angle
+        if self.on_ground:
+            self.pitch = np.clip(self.pitch, -0.2, 0.2)
 
         # Check crash
         if not self.on_ground and self.pos[1] <= 0.0 and \
@@ -194,7 +206,12 @@ class Aircraft2D:
                 self.vel[1] = 0.0
         self.on_ground = self.pos[1] <= 0.0 and self.vel[1] <= 1e-9
 
-    def draw(self, screen: pg.Surface, camera_pos: np.ndarray) -> None:
+        # Check terrain collision
+        if self.on_ground and not self.terrain.is_runway(self.pos[0]):
+            self.crashed = True
+            self.vel = np.array([0.0, 0.0])
+
+    def draw(self, screen: pg.Surface, camera_pos: np.ndarray, font: pg.font.Font) -> None:
         """Draw the aircraft on screen
 
         Args:
@@ -220,3 +237,9 @@ class Aircraft2D:
         # Draw aircraft shape
         pg.draw.polygon(screen, self.color, screen_points)
         pg.draw.polygon(screen, (0, 0, 0), screen_points, width=2)
+
+        # Draw altitude
+        altitude_text = font.render(f'{self.pos[1]:.1f} m', True, (0, 0, 0, 0.1))
+        screen_pos = world_to_screen(self.pos + np.array([-length / 2, -
+            width]), camera_pos, screen.get_size())
+        screen.blit(altitude_text, (screen_pos[0], screen_pos[1] - 40))

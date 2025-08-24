@@ -29,16 +29,27 @@ class Terrain:
         self.runway_color: tuple[int, int, int] = runway_color
         self.ground_color: tuple[int, int, int] = ground_color
 
-    def is_ocean(self, x: int) -> bool:
+    def is_ocean(self, x: int | float) -> bool:
         """Whether the given x-coordinate is in an ocean region
 
         Args:
-            x (int): x-coordinate (world position)
+            x (int | float): x-coordinate (world position)
 
         Returns:
             bool: whether the x-coordinate is in an ocean region
         """
         return any(start <= x <= end for start, end in self.oceans)
+    
+    def is_runway(self, x: int | float) -> bool:
+        """Whether the given x-coordinate is in a runway
+
+        Args:
+            x (int | float): x-coordinate (world position)
+
+        Returns:
+            bool: whether the x-coordinate is in a runway
+        """
+        return any(start <= x <= end for start, end in self.runways)
     
     def _draw_collection(self, screen: pg.Surface, camera_pos: np.ndarray,
                          collection: list[tuple[int, int]], color: tuple[int, int, int]) -> None:
@@ -52,11 +63,12 @@ class Terrain:
         """
         y_ground = world_to_screen(np.array([0.0, 0.0]), camera_pos, screen.get_size())[1]
         for start, end in collection:
-            if start < camera_pos[0] + screen.get_width() and end > camera_pos[0]:
-                x_start = max(start - camera_pos[0], 0)
-                x_end = min(end - camera_pos[0], screen.get_width())
-                pg.draw.rect(screen, color,
-                             (x_start, y_ground, x_end - x_start, screen.get_height() - y_ground))
+            x_start = max(start - camera_pos[0], 0)
+            x_end = min(end - camera_pos[0], screen.get_width())
+            x_start, _ = world_to_screen(np.array([start, 0.0]), camera_pos, screen.get_size())
+            x_end, _ = world_to_screen(np.array([end, 0.0]), camera_pos, screen.get_size())
+            pg.draw.rect(screen, color,
+                            (x_start, y_ground, x_end - x_start, screen.get_height() - y_ground))
     
     def draw(self, screen: pg.Surface, camera_pos: np.ndarray) -> None:
         """Draw the terrain on the screen
