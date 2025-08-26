@@ -10,7 +10,7 @@ from environment import Environment
 from terrain import Terrain
 from controller import Controller
 
-FILE = 'out\\20250824-184358\\best_gen45.npz'
+FILE = 'out\\20250826-212840\\best_gen41.npz'
 
 np.random.seed(1)
 

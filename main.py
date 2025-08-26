@@ -54,7 +54,7 @@ def main():
     )
 
     # Create GA
-    ga = GeneticAlgorithm(population_size=200, elite_fraction=0.1, mutation_rate=0.09)
+    ga = GeneticAlgorithm(population_size=200, elite_fraction=0.05, mutation_rate=0.09)
     controllers = [Controller() for _ in range(ga.population_size)]
     episode_time = 30.0  # [s]
 
