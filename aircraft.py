@@ -215,6 +215,11 @@ class Aircraft2D:
             self.crashed = True
             self.vel = np.array([0.0, 0.0])
 
+        # Check exceeded runway
+        if self.pos[0] > self.terrain.runways[-1][1]:
+            self.crashed = True
+            self.vel = np.array([0, 0])
+
         # Update position history
         self.pos_history.append(self.pos.copy())
 

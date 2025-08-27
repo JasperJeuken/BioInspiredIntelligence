@@ -5,7 +5,7 @@ import numpy as np
 class Controller:
     """Simple feedforward neural network controller"""
 
-    def __init__(self, input_size: int = 6, hidden_size: int = 15, output_size: int = 3) -> None:
+    def __init__(self, input_size: int = 6, hidden_size: int = 8, output_size: int = 3) -> None:
         """Create a controller with random weights
 
         Args:

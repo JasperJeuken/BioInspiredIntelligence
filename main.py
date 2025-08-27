@@ -80,10 +80,10 @@ def main():
         for ac, ctrl in zip(aircraft, controllers):
             for _ in range(sim_speed):
                 state = np.array([
-                    ac.pos[0],
-                    ac.pos[1],
-                    ac.vel[0],
-                    ac.vel[1],
+                    ac.pos[0] / 7400,
+                    ac.pos[1] / 200,
+                    ac.vel[0] / 150,
+                    ac.vel[1] / 20,
                     ac.pitch,
                     ac.pitch_rate
                 ])
